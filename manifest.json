@@ -1,0 +1,10 @@
+{
+  "name": "Quản Lý Ngân Sách",
+  "short_name": "Ngân Sách",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#5E48D6",
+  "theme_color": "#5E48D6",
+  "orientation": "portrait",
+  "icons": []
+}

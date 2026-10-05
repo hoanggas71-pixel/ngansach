@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#5E48D6">
+<title>Quản Lý Ngân Sách</title>
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ===== SCREEN: SETUP (tạo nhà / vào nhà) ===== -->
+<div id="scr-setup" class="screen active">
+  <div class="setup-box">
+    <h1>💰 Quản Lý Ngân Sách</h1>
+    <p class="muted">Dùng chung cho 2 người</p>
+
+    <div id="setup-choice">
+      <button class="btn btn-primary" onclick="showTaoNha()">🏠 Tạo nhà mới</button>
+      <button class="btn btn-secondary" onclick="showVaoNha()">🔑 Vào nhà có sẵn</button>
+    </div>
+
+    <div id="setup-tao" class="hidden">
+      <p class="muted">Nhập tên 2 người:</p>
+      <input id="inp-ten1" placeholder="Tên người 1 (VD: Vợ)" value="Vợ">
+      <input id="inp-ten2" placeholder="Tên người 2 (VD: Chồng)" value="Chồng">
+      <button class="btn btn-primary" onclick="taoNha()">✅ Tạo nhà</button>
+      <button class="btn btn-text" onclick="backSetup()">← Quay lại</button>
+    </div>
+
+    <div id="setup-vao" class="hidden">
+      <p class="muted">Nhập mã nhà được chia sẻ:</p>
+      <input id="inp-ma" placeholder="VD: ABC123" style="text-transform:uppercase">
+      <button class="btn btn-primary" onclick="vaoNha()">🚪 Vào nhà</button>
+      <button class="btn btn-text" onclick="backSetup()">← Quay lại</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SCREEN: MAIN ===== -->
+<div id="scr-main" class="screen">
+  <header id="app-header">
+    <div>
+      <h2 id="header-title">Trang chủ</h2>
+      <p id="header-sub" class="muted">Tháng --</p>
+    </div>
+    <div id="ma-nha-badge" onclick="copyMaNha()" title="Bấm để copy mã nhà"></div>
+  </header>
+
+  <main id="app-content"></main>
+
+  <nav id="bottom-nav">
+    <button class="nav-item active" data-tab="home" onclick="chonTab('home')">
+      <span>🏠</span><small>Trang chủ</small>
+    </button>
+    <button class="nav-item" data-tab="chitieu" onclick="chonTab('chitieu')">
+      <span>📋</span><small>Chi tiêu</small>
+    </button>
+    <button class="nav-item" data-tab="tongket" onclick="chonTab('tongket')">
+      <span>📊</span><small>Tổng kết</small>
+    </button>
+    <button class="nav-item" data-tab="sono" onclick="chonTab('sono')">
+      <span>💸</span><small>Sổ nợ</small>
+    </button>
+    <button class="nav-item" data-tab="caidat" onclick="chonTab('caidat')">
+      <span>⚙️</span><small>Cài đặt</small>
+    </button>
+  </nav>
+
+  <button id="fab" onclick="moThemKhoanChi()">＋</button>
+</div>
+
+<!-- ===== MODAL ===== -->
+<div id="modal" class="modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 id="modal-title">Thêm khoản chi</h3>
+      <button class="modal-close" onclick="dongModal()">✕</button>
+    </div>
+    <div id="modal-body" class="modal-body"></div>
+  </div>
+</div>
+
+<!-- ===== TOAST ===== -->
+<div id="toast" class="toast"></div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
