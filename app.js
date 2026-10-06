@@ -1,7 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
 import {
   getFirestore, doc, setDoc, getDoc, updateDoc, deleteDoc,
-  collection, onSnapshot, query, orderBy
+  collection, onSnapshot, query, orderBy, getDocs
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 
 // ==================== FIREBASE ====================
@@ -29,8 +29,8 @@ const timLoai = (ma) => DS_LOAI.find(l => l.ma === ma) || DS_LOAI[5];
 
 // ==================== STATE ====================
 let maNha = localStorage.getItem("maNha") || null;
-let house = null;         // { ten, nguois: [...] }
-let khoanChis = [];       // array
+let house = null;
+let khoanChis = [];
 let thanhToans = [];
 let khoanNos = [];
 
@@ -74,7 +74,11 @@ function toast(msg) {
   el.textContent = msg;
   el.classList.add("show");
   clearTimeout(window._toastT);
-  window._toastT = setTimeout(() => el.classList.remove("show"), 2000);
+  window._toastT = setTimeout(() => el.classList.remove("show"), 2500);
+}
+
+function escapeHtml(s) {
+  return String(s || "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
 // ==================== SETUP SCREEN ====================
@@ -146,7 +150,6 @@ function listenAll() {
   unsubs.forEach(u => u());
   unsubs = [];
 
-  // Lắng nghe thông tin nhà
   unsubs.push(onSnapshot(doc(db, "houses", maNha), (snap) => {
     if (snap.exists()) {
       house = snap.data();
@@ -158,7 +161,6 @@ function listenAll() {
     }
   }));
 
-  // Khoản chi
   unsubs.push(onSnapshot(
     query(collection(db, "houses", maNha, "khoanChis")),
     (snap) => {
@@ -167,7 +169,6 @@ function listenAll() {
     }
   ));
 
-  // Thanh toán
   unsubs.push(onSnapshot(
     query(collection(db, "houses", maNha, "thanhToans")),
     (snap) => {
@@ -176,7 +177,6 @@ function listenAll() {
     }
   ));
 
-  // Khoản nợ
   unsubs.push(onSnapshot(
     query(collection(db, "houses", maNha, "khoanNos")),
     (snap) => {
@@ -194,7 +194,7 @@ function tinhBuTru(tu, den) {
   const p1Tra = ds.filter(k => k.nguoiTraId === "p1").reduce((s,k)=>s+k.soTien,0);
   const p2Tra = ds.filter(k => k.nguoiTraId === "p2").reduce((s,k)=>s+k.soTien,0);
   const chenhLech = Math.abs(p1Tra - p2Tra) / 2;
-  // Đã thanh toán
+
   const tt = thanhToans.filter(t => trongKhoang(t.ngay, tu, den));
   const p2P1 = tt.filter(t => t.nguoiGuiId === "p2" && t.nguoiNhanId === "p1").reduce((s,t)=>s+t.soTien,0);
   const p1P2 = tt.filter(t => t.nguoiGuiId === "p1" && t.nguoiNhanId === "p2").reduce((s,t)=>s+t.soTien,0);
@@ -228,8 +228,14 @@ function render() {
 
   const content = document.getElementById("app-content");
   const fab = document.getElementById("fab");
-  fab.style.display = (tab === "home" || tab === "chitieu" || tab === "sono") ? "block" : "none";
-  fab.textContent = (tab === "sono") ? "＋" : "＋";
+  if (tab === "home" || tab === "chitieu") {
+    fab.style.display = "block";
+    fab.textContent = "＋";
+  } else if (tab === "sono") {
+    fab.style.display = "none";
+  } else {
+    fab.style.display = "none";
+  }
 
   if (tab === "home") content.innerHTML = renderHome();
   else if (tab === "chitieu") content.innerHTML = renderChiTieu();
@@ -257,15 +263,15 @@ function renderHome() {
     <div class="card-row"><span class="lbl">Tổng chi chung (chưa TT)</span><span class="val">${fmtVnd(kq.tongChiChiaDeu)}</span></div>
     <div class="card-row"><span class="lbl">Mỗi người chịu</span><span class="val">${fmtVnd(kq.moiNguoiChiu)}</span></div>
     <div class="card-divider"></div>
-    <div class="card-row"><span class="lbl">${p1} đã trả</span><span class="val" style="color:var(--primary)">${fmtVnd(kq.p1DaTra)}</span></div>
-    <div class="card-row"><span class="lbl">${p2} đã trả</span><span class="val" style="color:var(--secondary)">${fmtVnd(kq.p2DaTra)}</span></div>
+    <div class="card-row"><span class="lbl">${escapeHtml(p1)} đã trả</span><span class="val" style="color:var(--primary)">${fmtVnd(kq.p1DaTra)}</span></div>
+    <div class="card-row"><span class="lbl">${escapeHtml(p2)} đã trả</span><span class="val" style="color:var(--secondary)">${fmtVnd(kq.p2DaTra)}</span></div>
     <div class="card-divider"></div>
     <div class="card-row"><span class="lbl">Chênh lệch |A−B| / 2</span><span class="val">${fmtVnd(kq.chenhLech)}</span></div>
     ${kq.daThanhToan > 0 ? `<div class="card-row"><span class="lbl">Đã thanh toán</span><span class="val">- ${fmtVnd(kq.daThanhToan)}</span></div>` : ''}
     <div class="status-box ${kq.daHoa ? 'hoa' : 'win'}">
       ${kq.daHoa
         ? `<div style="font-weight:700">🎉 Đã hòa</div><div class="muted">Không ai nợ ai</div>`
-        : `<div class="muted">${kq.nguoiTraId === "p1" ? p1 : p2} → ${kq.nguoiNhanId === "p1" ? p1 : p2}</div>
+        : `<div class="muted">${kq.nguoiTraId === "p1" ? escapeHtml(p1) : escapeHtml(p2)} → ${kq.nguoiNhanId === "p1" ? escapeHtml(p1) : escapeHtml(p2)}</div>
            <div class="big">${fmtVnd(kq.conLai)}</div>`}
     </div>
     ${!kq.daHoa ? `<button class="btn btn-primary" onclick="tatToanChung()">✅ Tất toán tất cả khoản chung</button>` : ''}
@@ -296,7 +302,7 @@ function renderItemKhoanChi(k, choXem = true) {
     <div class="item-icon" style="background:${lc.mau}22">${lc.icon}</div>
     <div class="item-body">
       <div class="item-title">${escapeHtml(k.ten)}${daTT ? ' ✅' : ''}</div>
-      <div class="item-sub">${nguoi} trả • ${fmtGio(k.ngay)}${!k.chiaDeu ? ' • riêng' : (daTT ? ' • đã tất toán' : '')}</div>
+      <div class="item-sub">${escapeHtml(nguoi)} trả • ${fmtGio(k.ngay)}${!k.chiaDeu ? ' • riêng' : (daTT ? ' • đã tất toán' : '')}</div>
     </div>
     <div class="item-amount" style="${daTT ? 'color:#888' : ''}">${fmtVnd(k.soTien)}</div>
   </div>`;
@@ -307,7 +313,6 @@ function renderChiTieu() {
   const den = dauThangSau(thangHienTai);
   const ds = khoanChis.filter(k => trongKhoang(k.ngay, tu, den));
 
-  // Group by day
   const groups = {};
   ds.forEach(k => {
     const d = new Date(k.ngay);
@@ -365,10 +370,9 @@ function renderTongKet() {
 
   let html = renderThangNav();
 
-  // Lịch tháng
   const y = thangHienTai.getFullYear(), m = thangHienTai.getMonth();
-  const firstDay = new Date(y, m, 1).getDay(); // 0=CN, 1=T2...
-  const offset = (firstDay + 6) % 7; // 0=T2
+  const firstDay = new Date(y, m, 1).getDay();
+  const offset = (firstDay + 6) % 7;
   const soNgay = new Date(y, m+1, 0).getDate();
 
   html += `<div class="lich">
@@ -390,7 +394,6 @@ function renderTongKet() {
     <div class="muted" style="text-align:center;margin-top:8px">👆 Chạm vào ngày để xem chi tiết</div>
   </div>`;
 
-  // Chi tiết ngày
   if (ngayChon > 0) {
     const d1 = new Date(y, m, ngayChon).getTime();
     const d2 = new Date(y, m, ngayChon+1).getTime();
@@ -404,7 +407,6 @@ function renderTongKet() {
     else dsNgay.forEach(k => html += renderItemKhoanChi(k, true));
   }
 
-  // Tổng kết
   html += `<div class="section">📊 Tổng kết tháng ${m+1}</div>
   <div class="card">
     <div class="card-title">💸 TỔNG CHI</div>
@@ -412,29 +414,27 @@ function renderTongKet() {
     <div class="card-divider"></div>
     <div style="display:flex;gap:16px">
       <div style="flex:1">
-        <div class="muted">👤 ${p1}</div>
+        <div class="muted">👤 ${escapeHtml(p1)}</div>
         <div style="font-weight:700">${fmtVnd(kq.p1DaTra)}</div>
       </div>
       <div style="flex:1">
-        <div class="muted">👤 ${p2}</div>
+        <div class="muted">👤 ${escapeHtml(p2)}</div>
         <div style="font-weight:700">${fmtVnd(kq.p2DaTra)}</div>
       </div>
     </div>
   </div>`;
 
-  // Số dư
   html += `<div class="card">
     <div class="card-title">⚖️ SỐ DƯ CUỐI THÁNG</div>
     <div class="status-box ${kq.daHoa ? 'hoa' : 'win'}" style="margin-top:8px">
       ${kq.daHoa
         ? `<div style="font-weight:700">Đã hòa 🎉</div>`
-        : `<div class="muted">${kq.nguoiTraId==="p1"?p1:p2} nợ ${kq.nguoiNhanId==="p1"?p1:p2}</div>
+        : `<div class="muted">${kq.nguoiTraId==="p1"?escapeHtml(p1):escapeHtml(p2)} nợ ${kq.nguoiNhanId==="p1"?escapeHtml(p1):escapeHtml(p2)}</div>
            <div class="big">${fmtVnd(kq.conLai)}</div>`}
     </div>
     ${!kq.daHoa ? `<button class="btn btn-primary" onclick="tatToanChung()">✅ Tất toán tất cả</button>` : ''}
   </div>`;
 
-  // Phân loại
   const theoLoai = {};
   khoanChis.filter(k=>trongKhoang(k.ngay,tu,den)).forEach(k => {
     theoLoai[k.loai] = (theoLoai[k.loai] || 0) + k.soTien;
@@ -468,54 +468,81 @@ function renderTongKet() {
 window.chonNgay = (n) => { ngayChon = (ngayChon === n) ? -1 : n; render(); };
 
 function renderSoNo() {
-  const ds = khoanNos.sort((a,b)=>b.ngay-a.ngay);
-  const tongConLai = ds.reduce((s,k)=>s+Math.max(0, k.soTien - (k.daTraBaoNhieu||0)), 0);
-  const tongBanDau = ds.reduce((s,k)=>s+k.soTien, 0);
-  const tongDaTra = ds.reduce((s,k)=>s+Math.min(k.soTien, k.daTraBaoNhieu||0), 0);
+  const dsThu = khoanNos.filter(k => k.loai === "THU");
+  const dsChi = khoanNos.filter(k => k.loai === "CHI");
+  const tongThu = dsThu.reduce((s,k)=>s + Math.max(0, k.soTien - (k.daTraBaoNhieu||0)), 0);
+  const tongChi = dsChi.reduce((s,k)=>s + Math.max(0, k.soTien - (k.daTraBaoNhieu||0)), 0);
 
   let html = `<div class="card">
-    <div class="card-title">💰 TỔNG NỢ CÒN LẠI</div>
-    <div class="card-big-amount" style="${tongConLai>0?'color:var(--orange)':''}">${fmtVnd(tongConLai)}</div>
-    <div class="card-divider"></div>
     <div style="display:flex;gap:16px">
       <div style="flex:1">
-        <div class="muted">Nợ ban đầu</div>
-        <div style="font-weight:600">${fmtVnd(tongBanDau)}</div>
+        <div class="muted">📥 Người khác nợ mình</div>
+        <div style="font-size:16px;font-weight:700;color:${tongThu>0?'var(--green)':'#888'};margin-top:4px">${fmtVnd(tongThu)}</div>
       </div>
       <div style="flex:1">
-        <div class="muted">Đã trả</div>
-        <div style="font-weight:600;color:var(--green)">${fmtVnd(tongDaTra)}</div>
+        <div class="muted">📤 Mình nợ người khác</div>
+        <div style="font-size:16px;font-weight:700;color:${tongChi>0?'var(--orange)':'#888'};margin-top:4px">${fmtVnd(tongChi)}</div>
       </div>
     </div>
-    <div class="muted" style="margin-top:6px">Tổng ${ds.length} khoản nợ</div>
   </div>`;
 
-  html += `<div class="section">📋 Danh sách khoản nợ</div>`;
-
-  if (ds.length === 0) {
-    html += `<div class="empty"><div class="icon">📭</div>Chưa có khoản nợ nào<br><small>Bấm nút ＋ để thêm</small></div>`;
+  html += `<div class="section">📥 Người khác nợ mình (${dsThu.length})</div>`;
+  if (dsThu.length === 0) {
+    html += `<div class="empty">Chưa có ai nợ mình</div>`;
   } else {
-    ds.forEach(kn => {
-      const daTraHet = (kn.daTraBaoNhieu||0) >= kn.soTien;
-      const conLai = Math.max(0, kn.soTien - (kn.daTraBaoNhieu||0));
-      html += `<div class="item ${daTraHet ? 'done' : ''}" onclick="suaNo('${kn.id}')">
-        <div class="item-icon" style="background:${daTraHet?'#2E7D3222':'#E6510022'}">
-          ${daTraHet ? '✅' : '💸'}
-        </div>
-        <div class="item-body">
-          <div class="item-title">${escapeHtml(kn.tenNguoiNo)}</div>
-          <div class="item-sub">${fmtGio(kn.ngay)}</div>
-          ${kn.gc ? `<div class="item-sub">${escapeHtml(kn.gc)}</div>` : ''}
-          ${(kn.daTraBaoNhieu||0) > 0 && !daTraHet ? `<div class="item-sub" style="color:var(--green)">Đã trả ${fmtVnd(kn.daTraBaoNhieu)} / ${fmtVnd(kn.soTien)}</div>` : ''}
-        </div>
-        <div class="item-amount" style="${daTraHet ? 'color:#888' : 'color:var(--orange)'}">
-          ${daTraHet ? '<div style="font-size:11px">Đã trả hết</div>' : fmtVnd(conLai)}
-        </div>
-      </div>`;
-    });
+    dsThu.sort((a,b)=>b.ngay-a.ngay).forEach(kn => html += renderItemNo(kn));
   }
 
+  html += `<div class="section" style="margin-top:20px">📤 Mình nợ người khác (${dsChi.length})</div>`;
+  if (dsChi.length === 0) {
+    html += `<div class="empty">Chưa có ai mình nợ</div>`;
+  } else {
+    dsChi.sort((a,b)=>b.ngay-a.ngay).forEach(kn => html += renderItemNo(kn));
+  }
+
+  html += `<div style="height:16px"></div>`;
+
+  html += `<button onclick="moThemNo('THU')" style="position:fixed;bottom:140px;right:20px;background:var(--green);color:white;border:none;border-radius:24px;padding:12px 18px;font-size:14px;font-weight:700;box-shadow:0 4px 12px rgba(46,125,50,0.4);cursor:pointer;z-index:50">📥 Ghi người nợ mình</button>`;
+  html += `<button onclick="moThemNo('CHI')" style="position:fixed;bottom:80px;right:20px;background:var(--orange);color:white;border:none;border-radius:24px;padding:12px 18px;font-size:14px;font-weight:700;box-shadow:0 4px 12px rgba(230,81,0,0.4);cursor:pointer;z-index:50">📤 Ghi mình nợ ai</button>`;
+
   return html;
+}
+
+function renderItemNo(kn) {
+  const daTraHet = (kn.daTraBaoNhieu||0) >= kn.soTien;
+  const coDu = (kn.daTraBaoNhieu||0) > kn.soTien;
+  const conLai = Math.max(0, kn.soTien - (kn.daTraBaoNhieu||0));
+  const soDuThua = Math.max(0, (kn.daTraBaoNhieu||0) - kn.soTien);
+  const laThu = kn.loai === "THU";
+  const coMotPhan = (kn.daTraBaoNhieu||0) > 0 && !daTraHet;
+  const pct = Math.min(100, ((kn.daTraBaoNhieu||0) / kn.soTien) * 100);
+
+  return `<div class="item ${daTraHet && !coDu ? 'done' : ''}" onclick="suaNo('${kn.id}')"
+    style="${coDu ? 'background:#E3F2FD' : ''}">
+    <div class="item-icon" style="background:${coDu ? '#1976D2' : (daTraHet ? '#2E7D32' : (laThu ? '#2E7D32' : '#E65100'))}22">
+      ${coDu ? '🔄' : (daTraHet ? '✅' : (laThu ? '📥' : '📤'))}
+    </div>
+    <div class="item-body">
+      <div class="item-title">${escapeHtml(kn.tenNguoiNo)}</div>
+      <div class="item-sub">${fmtGio(kn.ngay)}</div>
+      ${kn.gc ? `<div class="item-sub">${escapeHtml(kn.gc)}</div>` : ''}
+      ${coMotPhan ? `
+        <div class="item-sub" style="color:var(--green);font-weight:600">
+          ${laThu ? 'Đã thu' : 'Đã trả'}: ${fmtVnd(kn.daTraBaoNhieu)}
+        </div>
+        <div style="height:4px;background:#eee;border-radius:2px;margin-top:4px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:var(--green)"></div>
+        </div>
+      ` : ''}
+    </div>
+    <div class="item-amount" style="${coDu ? 'color:#1976D2' : (daTraHet ? 'color:#888' : (laThu ? 'color:var(--green)' : 'color:var(--orange)'))};text-align:right">
+      ${coDu
+        ? `<div style="font-size:10px">Đã ${laThu?'thu':'trả'} dư</div><div style="font-size:15px">${fmtVnd(soDuThua)}</div><div style="font-size:9px">cần trả lại</div>`
+        : daTraHet
+        ? `<div style="font-size:11px">Đã tất toán</div>`
+        : `<div style="font-size:10px">${laThu?'Còn thu':'Còn trả'}</div><div style="font-size:15px">${fmtVnd(conLai)}</div>`}
+    </div>
+  </div>`;
 }
 
 function renderCaiDat() {
@@ -533,6 +560,22 @@ function renderCaiDat() {
     <input id="cd-ten1" value="${escapeHtml(p1)}" placeholder="Tên người 1">
     <input id="cd-ten2" value="${escapeHtml(p2)}" placeholder="Tên người 2">
     <button class="btn btn-primary" onclick="luuTen()">💾 Lưu tên</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title">💾 SAO LƯU / PHỤC HỒI</div>
+    <div class="muted" style="margin-bottom:8px">
+      File backup dùng được cho <b>cả web lẫn app Android</b>
+    </div>
+    <button class="btn btn-secondary" onclick="chonFolderBackup()" style="margin-bottom:8px">
+      📁 Chọn folder lưu (BackUp Web)
+    </button>
+    <button class="btn btn-primary" onclick="xuatBackup()">📤 Xuất backup (.json)</button>
+    <button class="btn btn-secondary" onclick="nhapBackup()">📥 Phục hồi từ file</button>
+    <div class="muted" style="margin-top:8px;font-size:11px;text-align:center">
+      💡 Lần đầu bấm "Xuất backup" sẽ hỏi chọn folder<br>
+      → Chọn folder <b>BackUp Web</b>
+    </div>
   </div>
 
   <div class="card">
@@ -603,7 +646,6 @@ function moModal(title, html) {
 let _kcEdit = { ten: "", soTien: "", loai: "AN", nguoiTraId: "p1", chiaDeu: true, gc: "", id: null };
 
 window.moThemKhoanChi = () => {
-  if (tab === "sono") return moThemNo(null);
   _kcEdit = { ten: "", soTien: "", loai: "AN", nguoiTraId: "p1", chiaDeu: true, gc: "", id: null };
   veModalKhoanChi("Thêm khoản chi");
 };
@@ -794,106 +836,206 @@ window.boDanhDau = async (id) => {
 };
 
 // ====== SỔ NỢ ======
-let _knEdit = { id: null, tenNguoiNo: "", soTien: "", daTraBaoNhieu: "", gc: "" };
+let _knEdit = { id: null, loai: "THU", tenNguoiNo: "", soTien: "", daTraBaoNhieu: "", gc: "" };
 
-window.moThemNo = (kn) => {
-  if (kn) {
-    _knEdit = { id: kn.id, tenNguoiNo: kn.tenNguoiNo, soTien: kn.soTien.toString(),
-                daTraBaoNhieu: (kn.daTraBaoNhieu||0).toString(), gc: kn.gc||"" };
-  } else {
-    _knEdit = { id: null, tenNguoiNo: "", soTien: "", daTraBaoNhieu: "", gc: "" };
-  }
+window.moThemNo = (loai) => {
+  _knEdit = { id: null, loai: loai || "THU", tenNguoiNo: "", soTien: "", daTraBaoNhieu: "", gc: "" };
   veModalNo();
 };
 
 window.suaNo = (id) => {
   const kn = khoanNos.find(x=>x.id===id);
-  if (kn) moThemNo(kn);
+  if (!kn) return;
+  _knEdit = {
+    id: kn.id, loai: kn.loai,
+    tenNguoiNo: kn.tenNguoiNo,
+    soTien: kn.soTien.toString(),
+    daTraBaoNhieu: (kn.daTraBaoNhieu||0).toString(),
+    gc: kn.gc||""
+  };
+  veModalNo();
 };
 
 function veModalNo() {
   const tongNo = parseInt(_knEdit.soTien || "0", 10);
-  const daTra = parseInt(_knEdit.daTraBaoNhieu || "0", 10);
-  const conLai = Math.max(0, tongNo - daTra);
-  const daTraHet = tongNo > 0 && conLai === 0;
+  const daTraCu = parseInt(_knEdit.daTraBaoNhieu || "0", 10);
+  const laThu = _knEdit.loai === "THU";
+  const conLaiCu = Math.max(0, tongNo - daTraCu);
+
+  const tieuDe = _knEdit.id ? "Sửa khoản nợ" : (laThu ? "Người khác nợ mình" : "Mình nợ người khác");
+  const nhanTen = laThu ? "Tên người nợ mình" : "Tên người mình nợ";
+  const nhanDaTruocDo = laThu ? "Đã thu trước đó" : "Đã trả trước đó";
+  const nhanSoThem = laThu ? "Thu thêm lần này (VNĐ)" : "Trả thêm lần này (VNĐ)";
 
   const html = `
-    <label class="muted">TÊN NGƯỜI NỢ</label>
-    <input id="kn-ten" placeholder="VD: Anh Nam..." value="${escapeHtml(_knEdit.tenNguoiNo)}">
-
-    <label class="muted" style="display:block;margin-top:12px">SỐ TIỀN NỢ (VNĐ)</label>
-    <input id="kn-tong" type="number" inputmode="numeric" placeholder="0" value="${_knEdit.soTien}">
-
-    <label class="muted" style="display:block;margin-top:12px">ĐÃ TRẢ BAO NHIÊU (VNĐ)</label>
-    <input id="kn-datra" type="number" inputmode="numeric" placeholder="0" value="${_knEdit.daTraBaoNhieu}" style="color:var(--green)">
-
-    <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
-      <button class="btn btn-small btn-secondary" onclick="datTra('0')">Trả 0</button>
-      <button class="btn btn-small btn-secondary" onclick="datTra('1/2')">Trả 1/2</button>
-      <button class="btn btn-small btn-secondary" onclick="datTra('het')">Trả hết</button>
+    <label class="muted">LOẠI CÔNG NỢ</label>
+    <div style="display:flex;gap:8px;margin-top:6px;margin-bottom:12px">
+      <button class="chip ${laThu?'active':''}" data-loai="THU" style="flex:1;padding:12px;${laThu?'background:var(--green);color:white':''}">
+        📥 Người khác nợ mình
+      </button>
+      <button class="chip ${!laThu?'active':''}" data-loai="CHI" style="flex:1;padding:12px;${!laThu?'background:var(--orange);color:white':''}">
+        📤 Mình nợ người khác
+      </button>
     </div>
 
-    <div id="kn-preview" style="margin-top:12px"></div>
+    <label class="muted">${nhanTen.toUpperCase()}</label>
+    <input id="kn-ten" placeholder="${laThu?'VD: Anh Nam...':'VD: Bạn Minh...'}" value="${escapeHtml(_knEdit.tenNguoiNo)}">
+
+    <label class="muted" style="display:block;margin-top:12px">SỐ TIỀN NỢ GỐC (VNĐ)</label>
+    <input id="kn-tong" type="number" inputmode="numeric" placeholder="0" value="${_knEdit.soTien}" style="font-size:18px;font-weight:700">
+    ${tongNo > 0 ? `<div class="muted" style="text-align:right;margin-top:4px;color:var(--primary)">= ${fmtVnd(tongNo)}</div>` : ''}
+
+    ${_knEdit.id && daTraCu > 0 ? `
+      <div class="card" style="background:#E8F5E9;margin-top:12px;padding:12px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="font-size:16px">${laThu?'📥':'📤'}</div>
+          <div style="flex:1">
+            <div class="muted">${nhanDaTruocDo}</div>
+            <div style="font-size:15px;font-weight:700;color:var(--green)">${fmtVnd(daTraCu)}</div>
+          </div>
+        </div>
+      </div>
+    ` : ''}
+
+    <label class="muted" style="display:block;margin-top:12px">${nhanSoThem.toUpperCase()}</label>
+    <input id="kn-them" type="number" inputmode="numeric" placeholder="0" value="" style="font-size:20px;font-weight:700;color:var(--green);border-color:var(--green)">
+
+    ${_knEdit.id && conLaiCu > 0 ? `
+      <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+        <button class="btn btn-small btn-secondary" onclick="datNhanh('1/2')" style="padding:6px 12px;width:auto">1/2</button>
+        <button class="btn btn-small btn-secondary" onclick="datNhanh('het')" style="padding:6px 12px;width:auto;color:var(--green);border-color:var(--green)">
+          ${laThu?'Thu hết':'Trả hết'}
+        </button>
+      </div>
+    ` : ''}
+
+    <div id="kn-preview" style="margin-top:10px"></div>
 
     <label class="muted" style="display:block;margin-top:12px">GHI CHÚ</label>
     <textarea id="kn-gc" placeholder="VD: mượn tiền mua đồ...">${escapeHtml(_knEdit.gc)}</textarea>
 
-    <button class="btn btn-primary" onclick="luuNo()">💾 LƯU</button>
+    <button class="btn btn-primary" onclick="luuNo()">💾 ${_knEdit.id?'CẬP NHẬT':'LƯU'}</button>
     ${_knEdit.id ? `<button class="btn btn-danger" onclick="xoaNo('${_knEdit.id}')">🗑 XÓA</button>` : ''}
   `;
-  moModal(_knEdit.id ? "Sửa khoản nợ" : "Thêm khoản nợ", html);
+  moModal(tieuDe, html);
   capNhatPreviewNo();
 
+  document.querySelectorAll('[data-loai]').forEach(b => {
+    b.onclick = () => {
+      _knEdit.loai = b.dataset.loai;
+      dongModal();
+      veModalNo();
+    };
+  });
+
   document.getElementById("kn-ten").oninput = (e) => _knEdit.tenNguoiNo = e.target.value;
-  document.getElementById("kn-tong").oninput = (e) => { _knEdit.soTien = e.target.value.replace(/\D/g,''); capNhatPreviewNo(); };
-  document.getElementById("kn-datra").oninput = (e) => { _knEdit.daTraBaoNhieu = e.target.value.replace(/\D/g,''); capNhatPreviewNo(); };
+  document.getElementById("kn-tong").oninput = (e) => {
+    _knEdit.soTien = e.target.value.replace(/\D/g,'');
+    capNhatPreviewNo();
+  };
+  document.getElementById("kn-them").oninput = (e) => {
+    _knEdit.soThem = e.target.value.replace(/\D/g,'');
+    capNhatPreviewNo();
+  };
   document.getElementById("kn-gc").oninput = (e) => _knEdit.gc = e.target.value;
 }
 
-function capNhatPreviewNo() {
+window.datNhanh = (kieu) => {
   const tong = parseInt(_knEdit.soTien || "0", 10);
-  const daTra = parseInt(_knEdit.daTraBaoNhieu || "0", 10);
-  const conLai = Math.max(0, tong - daTra);
-  const daTraHet = tong > 0 && conLai === 0;
-  const el = document.getElementById("kn-preview");
-  if (tong <= 0) { el.innerHTML = ''; return; }
-  el.innerHTML = `
-    <div class="status-box ${daTraHet ? 'hoa' : 'no'}">
-      <div style="font-weight:700;font-size:11px;color:${daTraHet ? 'var(--green)' : 'var(--orange)'}">
-        ${daTraHet ? '🎉 Đã trả hết nợ' : '💸 SỐ NỢ CÒN LẠI'}
-      </div>
-      <div class="big">${fmtVnd(conLai)}</div>
-      <div class="muted">${fmtVnd(tong)} − ${fmtVnd(daTra)} = ${fmtVnd(conLai)}</div>
-    </div>
-  `;
-}
-
-window.datTra = (kieu) => {
-  const tong = parseInt(_knEdit.soTien || "0", 10);
-  if (tong <= 0) return toast("Nhập tổng nợ trước");
+  const daTraCu = parseInt(_knEdit.daTraBaoNhieu || "0", 10);
+  const conLai = Math.max(0, tong - daTraCu);
+  if (conLai <= 0) return toast("Không còn nợ");
   let v = "0";
-  if (kieu === "1/2") v = Math.floor(tong/2).toString();
-  if (kieu === "het") v = tong.toString();
-  _knEdit.daTraBaoNhieu = v;
-  document.getElementById("kn-datra").value = v;
+  if (kieu === "1/2") v = Math.floor(conLai/2).toString();
+  if (kieu === "het") v = conLai.toString();
+  _knEdit.soThem = v;
+  document.getElementById("kn-them").value = v;
   capNhatPreviewNo();
 };
+
+function capNhatPreviewNo() {
+  const tong = parseInt(_knEdit.soTien || "0", 10);
+  const daTraCu = parseInt(_knEdit.daTraBaoNhieu || "0", 10);
+  const soThem = parseInt(_knEdit.soThem || "0", 10);
+  const daTraMoi = daTraCu + soThem;
+  const conLai = Math.max(0, tong - daTraMoi);
+  const soDuThua = Math.max(0, daTraMoi - tong);
+  const daTraHet = tong > 0 && conLai === 0;
+  const coDu = soDuThua > 0;
+  const laThu = _knEdit.loai === "THU";
+
+  const el = document.getElementById("kn-preview");
+  if (tong <= 0) { el.innerHTML = ''; return; }
+
+  let html = '';
+
+  if (soThem > 0 && daTraCu > 0) {
+    html += `<div style="background:rgba(94,72,214,0.08);padding:10px;border-radius:10px;margin-bottom:8px">
+      <div class="muted" style="font-weight:700;font-size:11px">Cộng dồn:</div>
+      <div style="font-weight:600;color:var(--primary);margin-top:2px">
+        ${fmtVnd(daTraCu)} + ${fmtVnd(soThem)} = ${fmtVnd(daTraMoi)}
+      </div>
+    </div>`;
+  }
+
+  const bg = coDu ? '#E3F2FD' : (daTraHet ? '#E8F5E9' : (laThu ? '#E8F5E9' : '#FFF3E0'));
+  const colorMain = coDu ? '#1976D2' : (daTraHet || laThu ? 'var(--green)' : 'var(--orange)');
+
+  if (coDu) {
+    html += `<div style="background:${bg};padding:12px;border-radius:12px">
+      <div style="font-size:11px;font-weight:700;color:${colorMain}">💙 ĐÃ ${laThu?'THU':'TRẢ'} DƯ</div>
+      <div style="font-size:22px;font-weight:700;color:${colorMain};margin-top:4px">${fmtVnd(soDuThua)}</div>
+      <div style="font-size:11px;color:${colorMain};margin-top:2px;font-weight:600">
+        ${laThu ? 'Cần trả lại người nợ' : 'Người kia cần trả lại'}
+      </div>
+    </div>`;
+  } else {
+    html += `<div style="background:${bg};padding:12px;border-radius:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:11px;font-weight:700;color:${colorMain}">
+          ${daTraHet ? (laThu?'🎉 ĐÃ THU HẾT':'🎉 ĐÃ TRẢ HẾT') : (laThu?'📥 CÒN PHẢI THU':'📤 CÒN PHẢI TRẢ')}
+        </div>
+        <div style="font-size:11px;color:#888">Tổng: ${fmtVnd(tong)}</div>
+      </div>
+      <div style="font-size:22px;font-weight:700;color:${colorMain};margin-top:4px">${fmtVnd(conLai)}</div>
+      ${daTraMoi > 0 ? `
+        <div style="font-size:11px;color:var(--green);margin-top:4px;font-weight:600">
+          ${laThu?'Đã thu':'Đã trả'} ${fmtVnd(daTraMoi)} / ${fmtVnd(tong)}
+        </div>
+      ` : ''}
+    </div>`;
+  }
+
+  el.innerHTML = html;
+}
 
 window.luuNo = async () => {
   const ten = _knEdit.tenNguoiNo.trim();
   const soTien = parseInt(_knEdit.soTien || "0", 10);
-  const daTra = Math.min(soTien, parseInt(_knEdit.daTraBaoNhieu || "0", 10));
-  if (!ten) return toast("Nhập tên người nợ");
+  const daTraCu = parseInt(_knEdit.daTraBaoNhieu || "0", 10);
+  const soThem = parseInt(_knEdit.soThem || "0", 10);
+  const daTraMoi = daTraCu + soThem;
+
+  if (!ten) return toast("Nhập tên người");
   if (soTien <= 0) return toast("Nhập số tiền hợp lệ");
 
   const data = {
-    tenNguoiNo: ten, soTien, ngay: _knEdit.id ? _knEdit.ngay : Date.now(),
-    gc: _knEdit.gc.trim(), daTraBaoNhieu: daTra
+    loai: _knEdit.loai,
+    tenNguoiNo: ten,
+    soTien: soTien,
+    ngay: _knEdit.id ? _knEdit.ngay : Date.now(),
+    gc: _knEdit.gc.trim(),
+    daTraBaoNhieu: daTraMoi
   };
+
   try {
     if (_knEdit.id) {
       await updateDoc(doc(db, "houses", maNha, "khoanNos", _knEdit.id), data);
-      toast("Đã cập nhật");
+      if (soThem > 0) {
+        toast(`✅ Đã ${_knEdit.loai === 'THU' ? 'thu' : 'trả'} thêm ${fmtVnd(soThem)}`);
+      } else {
+        toast("Đã cập nhật");
+      }
     } else {
       const id = Date.now().toString(36) + Math.random().toString(36).slice(2,7);
       await setDoc(doc(db, "houses", maNha, "khoanNos", id), data);
@@ -910,10 +1052,309 @@ window.xoaNo = async (id) => {
   dongModal();
 };
 
-// ==================== MISC ====================
-function escapeHtml(s) {
-  return String(s || "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// ==================== BACKUP / RESTORE (COMPATIBLE WITH ANDROID) ====================
+// ===== HANDLE FOLDER (File System Access API) =====
+let _folderHandle = null;
+
+function openIdbFs() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open("budget_fs", 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains("handles")) {
+        db.createObjectStore("handles");
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
 }
+
+async function getSavedFolderHandle() {
+  try {
+    const db = await openIdbFs();
+    return await new Promise((resolve) => {
+      const tx = db.transaction("handles", "readonly");
+      const getReq = tx.objectStore("handles").get("backup_folder");
+      getReq.onsuccess = () => resolve(getReq.result || null);
+      getReq.onerror = () => resolve(null);
+    });
+  } catch (e) { return null; }
+}
+
+async function saveFolderHandle(handle) {
+  try {
+    const db = await openIdbFs();
+    await new Promise((resolve) => {
+      const tx = db.transaction("handles", "readwrite");
+      tx.objectStore("handles").put(handle, "backup_folder");
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    });
+  } catch (e) { console.warn(e); }
+}
+
+async function getFolderHandle() {
+  if (_folderHandle) return _folderHandle;
+  if (!window.showDirectoryPicker) return null;
+  const saved = await getSavedFolderHandle();
+  if (!saved) return null;
+  try {
+    const perm = await saved.queryPermission({ mode: "readwrite" });
+    if (perm === "granted") {
+      _folderHandle = saved;
+      return _folderHandle;
+    }
+  } catch (e) { console.warn(e); }
+  return null;
+}
+
+async function chonFolderBackup() {
+  if (!window.showDirectoryPicker) {
+    toast("⚠️ Trình duyệt không hỗ trợ chọn folder. File sẽ vào Downloads.");
+    return null;
+  }
+  try {
+    const handle = await window.showDirectoryPicker({ mode: "readwrite" });
+    await saveFolderHandle(handle);
+    _folderHandle = handle;
+    toast("✅ Đã chọn folder: " + handle.name);
+    return handle;
+  } catch (e) {
+    if (e.name !== "AbortError") toast("❌ " + e.message);
+    return null;
+  }
+}
+window.chonFolderBackup = chonFolderBackup;
+
+window.xuatBackup = async () => {
+  if (!maNha) return toast("Chưa vào nhà nào");
+  try {
+    toast("⏳ Đang chuẩn bị backup...");
+    const [kcSnap, ttSnap, knSnap, houseSnap] = await Promise.all([
+      getDocs(collection(db, "houses", maNha, "khoanChis")),
+      getDocs(collection(db, "houses", maNha, "thanhToans")),
+      getDocs(collection(db, "houses", maNha, "khoanNos")),
+      getDoc(doc(db, "houses", maNha))
+    ]);
+
+    const houseData = houseSnap.exists() ? houseSnap.data() : {};
+    const nguois = houseData.nguois || [];
+    const now = Date.now();
+    const makeId = (offset) => now + offset;
+    const personIdToNum = (pid) => {
+      if (pid === "p1" || pid === 1 || pid === "1") return 1;
+      if (pid === "p2" || pid === 2 || pid === "2") return 2;
+      return 1;
+    };
+
+    const nguoisAndroid = nguois.map((n, i) => ({
+      id: i + 1,
+      ten: n.ten || (i === 0 ? "Người 1" : "Người 2")
+    }));
+
+    const kcs = kcSnap.docs.map((d, i) => {
+      const data = d.data();
+      return {
+        id: makeId(i),
+        ten: data.ten || "",
+        soTien: data.soTien || 0,
+        loai: data.loai || "KHAC",
+        nguoiTraId: personIdToNum(data.nguoiTraId),
+        chiaDeu: !!data.chiaDeu,
+        ngay: data.ngay || now,
+        gc: data.gc || "",
+        daTTRieng: !!data.daThanhToanRieng
+      };
+    });
+
+    const tts = ttSnap.docs.map((d, i) => {
+      const data = d.data();
+      return {
+        id: makeId(1000000 + i),
+        nguoiGuiId: personIdToNum(data.nguoiGuiId),
+        nguoiNhanId: personIdToNum(data.nguoiNhanId),
+        soTien: data.soTien || 0,
+        ngay: data.ngay || now,
+        gc: data.gc || ""
+      };
+    });
+
+    const kns = knSnap.docs.map((d, i) => {
+      const data = d.data();
+      return {
+        id: makeId(2000000 + i),
+        loai: data.loai || "THU",
+        tenNguoiNo: data.tenNguoiNo || "",
+        soTien: data.soTien || 0,
+        ngay: data.ngay || now,
+        gc: data.gc || "",
+        daTraBaoNhieu: data.daTraBaoNhieu || 0
+      };
+    });
+
+    const data = { nguois: nguoisAndroid, kcs, tts, kns };
+    const json = JSON.stringify(data, null, 2);
+
+    const d = new Date();
+    const ten = `ngansach_${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}_${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}${String(d.getSeconds()).padStart(2,'0')}.json`;
+
+    // Lưu vào folder "BackUp Web" nếu đã chọn
+    let handle = await getFolderHandle();
+    if (!handle && window.showDirectoryPicker) {
+      const chon = confirm(
+        "Lần đầu sao lưu, bạn cần chọn folder để lưu file.\n\n" +
+        "→ Hãy chọn folder: BackUp Web\n" +
+        "(Nằm trong thư mục Ngan Sach)\n\n" +
+        "Bấm OK để chọn folder."
+      );
+      if (chon) {
+        handle = await chonFolderBackup();
+      }
+    }
+
+    if (handle) {
+      try {
+        let perm = await handle.queryPermission({ mode: "readwrite" });
+        if (perm !== "granted") {
+          perm = await handle.requestPermission({ mode: "readwrite" });
+        }
+        if (perm === "granted") {
+          const fileHandle = await handle.getFileHandle(ten, { create: true });
+          const writable = await fileHandle.createWritable();
+          await writable.write(json);
+          await writable.close();
+          toast(`✅ Đã lưu vào "${handle.name}": ${ten}`);
+          return;
+        }
+      } catch (e) {
+        console.warn("Lỗi lưu folder:", e);
+      }
+    }
+
+    // Fallback: tải về Downloads
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = ten;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast(`✅ Đã tải về Downloads: ${ten}\n(Tự chuyển vào folder BackUp Web)`);
+
+  } catch (e) {
+    console.error(e);
+    toast("❌ Lỗi: " + e.message);
+  }
+};
+
+window.nhapBackup = () => {
+  if (!maNha) return toast("Chưa vào nhà nào");
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json,application/json';
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!confirm("⚠️ Phục hồi sẽ THAY THẾ toàn bộ dữ liệu hiện tại. Tiếp tục?")) return;
+
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+
+      let nguoisRaw, kcsRaw, ttsRaw, knsRaw;
+
+      if (data.kcs && data.nguois) {
+        nguoisRaw = data.nguois;
+        kcsRaw = data.kcs;
+        ttsRaw = data.tts || [];
+        knsRaw = data.kns || [];
+      } else if (data.khoanChis) {
+        nguoisRaw = data.house?.nguois || [];
+        kcsRaw = data.khoanChis;
+        ttsRaw = data.thanhToans || [];
+        knsRaw = data.khoanNos || [];
+      } else {
+        toast("❌ File không hợp lệ");
+        return;
+      }
+
+      toast("⏳ Đang phục hồi...");
+
+      const numToPId = (n) => {
+        const num = typeof n === "number" ? n : parseInt(n, 10);
+        return num === 2 ? "p2" : "p1";
+      };
+
+      const [kcCu, ttCu, knCu] = await Promise.all([
+        getDocs(collection(db, "houses", maNha, "khoanChis")),
+        getDocs(collection(db, "houses", maNha, "thanhToans")),
+        getDocs(collection(db, "houses", maNha, "khoanNos"))
+      ]);
+
+      for (const d of kcCu.docs) await deleteDoc(doc(db, "houses", maNha, "khoanChis", d.id));
+      for (const d of ttCu.docs) await deleteDoc(doc(db, "houses", maNha, "thanhToans", d.id));
+      for (const d of knCu.docs) await deleteDoc(doc(db, "houses", maNha, "khoanNos", d.id));
+
+      for (let i = 0; i < kcsRaw.length; i++) {
+        const kc = kcsRaw[i];
+        const id = Date.now().toString(36) + i.toString(36) + Math.random().toString(36).slice(2,5);
+        await setDoc(doc(db, "houses", maNha, "khoanChis", id), {
+          ten: kc.ten || "",
+          soTien: kc.soTien || 0,
+          loai: kc.loai || "KHAC",
+          nguoiTraId: numToPId(kc.nguoiTraId),
+          chiaDeu: !!kc.chiaDeu,
+          ngay: kc.ngay || Date.now(),
+          gc: kc.gc || "",
+          daThanhToanRieng: !!(kc.daTTRieng || kc.daThanhToanRieng)
+        });
+      }
+
+      for (let i = 0; i < ttsRaw.length; i++) {
+        const tt = ttsRaw[i];
+        const id = Date.now().toString(36) + "t" + i.toString(36) + Math.random().toString(36).slice(2,5);
+        await setDoc(doc(db, "houses", maNha, "thanhToans", id), {
+          nguoiGuiId: numToPId(tt.nguoiGuiId),
+          nguoiNhanId: numToPId(tt.nguoiNhanId),
+          soTien: tt.soTien || 0,
+          ngay: tt.ngay || Date.now(),
+          gc: tt.gc || ""
+        });
+      }
+
+      for (let i = 0; i < knsRaw.length; i++) {
+        const kn = knsRaw[i];
+        const id = Date.now().toString(36) + "n" + i.toString(36) + Math.random().toString(36).slice(2,5);
+        await setDoc(doc(db, "houses", maNha, "khoanNos", id), {
+          loai: kn.loai || "THU",
+          tenNguoiNo: kn.tenNguoiNo || "",
+          soTien: kn.soTien || 0,
+          ngay: kn.ngay || Date.now(),
+          gc: kn.gc || "",
+          daTraBaoNhieu: kn.daTraBaoNhieu || 0
+        });
+      }
+
+      if (nguoisRaw.length >= 2) {
+        await updateDoc(doc(db, "houses", maNha), {
+          nguois: [
+            { id: "p1", ten: nguoisRaw[0].ten || "Người 1" },
+            { id: "p2", ten: nguoisRaw[1].ten || "Người 2" }
+          ]
+        });
+      }
+
+      toast(`✅ Đã phục hồi: ${kcsRaw.length} khoản chi, ${knsRaw.length} khoản nợ`);
+    } catch (e) {
+      console.error(e);
+      toast("❌ Lỗi: " + e.message);
+    }
+  };
+  input.click();
+};
 
 // ==================== KHỞI ĐỘNG ====================
 (function init() {
